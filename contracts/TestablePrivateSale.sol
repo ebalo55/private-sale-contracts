@@ -5,7 +5,7 @@ import "hardhat/console.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-interface MelodityLocks {
+interface IMelodity {
     /**
      * Lock the provided amount of MELD for "relativeReleaseTime" seconds starting from now
      * NOTE: This method is capped
@@ -18,15 +18,24 @@ interface MelodityLocks {
     ) external;
 
     function decimals() external returns (uint8);
+
+    function release(uint256 lock_id) external;
+
+    function burn(uint256 amount) external;
+
+    function balanceOf(address account) external returns (uint256);
 }
 
 contract TestablePrivateSale is Ownable {
+    IMelodity internal melodity;
+
     uint256 public maxRelease;
     uint256 public released;
 
     event Released(uint256 amount);
     event Bought(address account, uint256 amount);
 
+    uint256 public alive_until;
     uint256 public ICO_END = 1648771199;
     uint256 month = 2592000; // 60 * 60 * 24 * 30
 
@@ -39,9 +48,11 @@ contract TestablePrivateSale is Ownable {
      *
      * Melodity Bep20: 0x13E971De9181eeF7A4aEAEAA67552A6a4cc54f43
      */
-    constructor() {
+    constructor(uint256 _alive_until, address _melodity) {
         maxRelease = 50_000_000 * 10**18;
         released = 49970000 * 10**18; // no decimal positions
+        alive_until = _alive_until;
+        melodity = IMelodity(_melodity);
     }
 
     /**
@@ -59,6 +70,7 @@ contract TestablePrivateSale is Ownable {
             "Private sale requires a minimum investment of 1 BNB"
         );
         require(released < maxRelease, "Private sale exhausted");
+        require(block.timestamp < alive_until, "Private sale elapsed");
         buy(msg.sender, msg.value);
     }
 
@@ -175,5 +187,42 @@ contract TestablePrivateSale is Ownable {
 
     function updateMaxRelease(uint256 _newMaxRelease) public onlyOwner {
         maxRelease = _newMaxRelease;
+    }
+
+    /**
+     * Interact with the melodity token to redeem the self lock
+     * and completely burn immediately.
+     * All this is done in the same transaction.
+     */
+    function burnUnsold() public onlyOwner {
+        require(
+            block.timestamp >= alive_until,
+            "Private sale is still live, cannot burn unsold"
+        );
+        if (log) {
+            console.log("released:", released);
+        }
+        melodity.release(0);
+        melodity.burn(melodity.balanceOf(address(this)));
+    }
+
+	/**
+     * Interact with the melodity token to create a self lock.
+     */
+    function createSelfLock() public onlyOwner {
+        require(
+            block.timestamp >= alive_until,
+            "Private sale is still live, cannot burn unsold"
+        );
+        if (log) {
+            console.log("maxRelease:", maxRelease);
+            console.log("released:", released);
+        }
+
+        uint256 unsold = maxRelease - released;
+        if (unsold > 0) {
+            melodity.insertLock(address(this), unsold, 0);
+            released = maxRelease;
+        }
     }
 }

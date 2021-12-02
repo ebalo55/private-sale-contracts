@@ -1,22 +1,22 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
 
 describe("Private sale", function () {
   it("is deployable", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
   });
   it("can retrieve latest prices", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
     expect((await private_sale.getLatestPrice())[0]).to.equal(62322000000);
   });
   it("does not own BNB", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
     expect(await ethers.utils.formatEther(
@@ -25,7 +25,7 @@ describe("Private sale", function () {
   });
   it("refuses small balances", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
 	let owner = await ethers.getSigner()
@@ -49,7 +49,7 @@ describe("Private sale", function () {
   });
   it("accept exactly 1 BNB", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
 	let owner = await ethers.getSigner()
@@ -65,7 +65,7 @@ describe("Private sale", function () {
   });
   it("increase the released amount", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
 	let owner = await ethers.getSigner()
@@ -81,7 +81,7 @@ describe("Private sale", function () {
   });
   it("stops at cap", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
 	let owner = await ethers.getSigner()
@@ -97,7 +97,7 @@ describe("Private sale", function () {
   });
   it("refunds exceeding", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
 	let owner = await ethers.getSigner()
@@ -113,7 +113,7 @@ describe("Private sale", function () {
   });
   it("can release funds", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
 	let owner = await ethers.getSigner()
@@ -135,7 +135,7 @@ describe("Private sale", function () {
   });
   it("can update max release", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
 	let max_release = await ethers.utils.formatEther(
@@ -152,11 +152,58 @@ describe("Private sale", function () {
   });
   it("is ICO end correct", async function () {
     const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
-    const private_sale = await PrivateSale.deploy();
+    const private_sale = await PrivateSale.deploy(1642118399, "0x0000000000000000000000000000000000000000");
     await private_sale.deployed();
 
 	expect(
 		await private_sale.ICO_END()
 	).to.equals("1648771199")
+  });
+  it("can burn unsold", async function () {
+	const Melodity = await ethers.getContractFactory("Melodity");
+	const melodity = await Melodity.deploy();
+	await melodity.deployed();
+	
+	let now = (Date.now() / 1000) - 1 | 0
+
+    const PrivateSale = await ethers.getContractFactory("TestablePrivateSale");
+    const private_sale = await PrivateSale.deploy(now, melodity.address);
+    await private_sale.deployed();
+
+	await melodity.grantRole(
+		"0x0000000000000000000000000000000000000000000000000000000000000000",
+		private_sale.address
+	)
+
+	expect(
+		await private_sale.alive_until()
+	).to.equals(now.toString())
+
+	expect(await ethers.utils.formatEther(
+		await melodity.balanceOf("0x0000000000000000000000000000000000000000")
+	)).to.equals("0.0")
+
+	let supply = await ethers.utils.formatEther(
+		await melodity.totalSupply()
+	)
+
+	// update max release amount to let the burn destroy some funds
+	await private_sale.updateMaxRelease(
+		ethers.utils.parseEther("51000000.0")
+	)
+	await private_sale.createSelfLock()
+	await private_sale.burnUnsold()
+
+	expect(await ethers.utils.formatEther(
+		await melodity.balanceOf(private_sale.address)
+	)).to.equals("0.0")
+
+	expect(await ethers.utils.formatEther(
+		await melodity.balanceOf("0x0000000000000000000000000000000000000000")
+	)).to.equals("0.0")
+
+	expect(await ethers.utils.formatEther(
+		await melodity.totalSupply()
+	)).to.equals(supply)
   });
 });

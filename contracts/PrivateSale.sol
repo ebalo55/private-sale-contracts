@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-interface MelodityLocks {
+interface IMelodity {
     /**
      * Lock the provided amount of MELD for "relativeReleaseTime" seconds starting from now
      * NOTE: This method is capped
@@ -17,11 +17,17 @@ interface MelodityLocks {
     ) external;
 
     function decimals() external returns (uint8);
+
+	function release(uint256 lock_id) external;
+
+	function burn(uint256 amount) external;
+
+	function balanceOf(address account) external returns(uint256);
 }
 
 contract PrivateSale is Ownable {
     AggregatorV3Interface internal priceFeed;
-    MelodityLocks internal melodity;
+    IMelodity internal melodity;
 
     uint256 public maxRelease;
     uint256 public released;
@@ -29,7 +35,8 @@ contract PrivateSale is Ownable {
     event Released(uint256 amount);
     event Bought(address account, uint256 amount);
 
-    uint256 ICO_END = 1648771199;
+	uint256 public alive_until = 1642118399;
+    uint256 public ICO_END = 1648771199;
     uint256 month = 2592000; // 60 * 60 * 24 * 30
 
     /**
@@ -43,10 +50,10 @@ contract PrivateSale is Ownable {
         priceFeed = AggregatorV3Interface(
             0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE
         );
-        melodity = MelodityLocks(0x13E971De9181eeF7A4aEAEAA67552A6a4cc54f43);
+        melodity = IMelodity(0x13E971De9181eeF7A4aEAEAA67552A6a4cc54f43);
 
-        maxRelease = INSERT_MAX_RELEASE_HERE * 10**melodity.decimals();
-        released = INSERT_ALREADY_RELEASED_AMOUNT_HERE * 10**(melodity.decimals() - 1); // 1 decimal position
+        maxRelease = 1 * 10**melodity.decimals();
+        released = 1 * 10**(melodity.decimals() - 1); // 1 decimal position
     }
 
     /**
@@ -63,6 +70,7 @@ contract PrivateSale is Ownable {
             "Private sale requires a minimum investment of 1 BNB"
         );
         require(released < maxRelease, "Private sale exhausted");
+		require(block.timestamp < alive_until, "Private sale elapsed");
         buy(msg.sender, msg.value);
     }
 
@@ -143,7 +151,41 @@ contract PrivateSale is Ownable {
         emit Released(balance);
     }
 
+	/**
+     * Set a new max release amount, 18 decimals	
+	 */
     function updateMaxRelease(uint256 _newMaxRelease) public onlyOwner {
         maxRelease = _newMaxRelease;
+    }
+
+	/**
+     * Interact with the melodity token to redeem the self lock
+     * and completely burn immediately.
+     * All this is done in the same transaction.
+     */
+    function burnUnsold() public onlyOwner {
+        require(
+            block.timestamp >= alive_until,
+            "Private sale is still live, cannot burn unsold"
+        );
+		
+        melodity.release(0);
+        melodity.burn(melodity.balanceOf(address(this)));
+    }
+
+	/**
+     * Interact with the melodity token to create a self lock.
+     */
+    function createSelfLock() public onlyOwner {
+        require(
+            block.timestamp >= alive_until,
+            "Private sale is still live, cannot burn unsold"
+        );
+
+        uint256 unsold = maxRelease - released;
+        if (unsold > 0) {
+            melodity.insertLock(address(this), unsold, 0);
+            released = maxRelease;
+        }
     }
 }
