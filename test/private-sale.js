@@ -237,7 +237,7 @@ describe("Private sale", function () {
 			ethers.utils.parseEther("61000000.0")
 		);
 
-		let already_relesed = await ethers.utils.formatEther(await private_sale.released());
+		let already_released = await ethers.utils.formatEther(await private_sale.released());
 
 		await private_sale.buy("non-existing", {
 			value: ethers.utils.parseEther("1.0"),
@@ -245,9 +245,9 @@ describe("Private sale", function () {
 
 		expect(
 			await ethers.utils.formatEther(await private_sale.released())
-		).to.equals((+already_relesed + 24928.8).toString());
+		).to.equals((+already_released + 24928.8).toString());
 	});
-	it("can add referral", async function () {
+	it("can add referral and checks work", async function () {
 		const PrivateSale = await ethers.getContractFactory(
 			"TestablePrivateSale"
 		);
@@ -257,20 +257,65 @@ describe("Private sale", function () {
 		);
 		await private_sale.deployed();
 
+		await private_sale.updateMaxRelease(
+			ethers.utils.parseEther("61000000.0")
+		);
+
 		let _now = (Date.now() / 1000 - 1) | 0,
 			_2_min = (Date.now() / 1000 + 120) | 0
 
 		await private_sale.addReferral(
 			"code",
 			5,
-			0,
+			2,
 			_now,
 			_2_min
 		);
 
+		let already_released = await ethers.utils.formatEther(await private_sale.released());
+
+		await private_sale.buy("code", {
+			value: ethers.utils.parseEther("1.0"),
+		});
+
 		expect(
 			await ethers.utils.formatEther(await private_sale.released())
-		).to.equals((+already_relesed + 24928.8).toString());
+		).to.equals((+already_released + 26175.24).toString());
+
+		await private_sale.buy("non-existing", {
+			value: ethers.utils.parseEther("1.0"),
+		});
+
+		expect(
+			await ethers.utils.formatEther(await private_sale.released())
+		).to.equals((+already_released + 26175.24 + 24928.8).toString());
+	});
+	it("fails if elapsed", async function () {
+		const PrivateSale = await ethers.getContractFactory(
+			"TestablePrivateSale"
+		);
+
+		let _now = (Date.now() / 1000) - 1 | 0
+
+		const private_sale = await PrivateSale.deploy(
+			_now,
+			"0x0000000000000000000000000000000000000000"
+		);
+		await private_sale.deployed();
+
+		let owner = await ethers.getSigner();
+		const tx = owner.sendTransaction({
+			to: private_sale.address,
+			value: ethers.utils.parseEther("1.0"),
+		});
+		try {
+			await tx;
+		} catch (e) {
+			expect(e.message).to.equals(
+				"VM Exception while processing transaction: reverted with reason string " +
+					"'Private sale elapsed'"
+			);
+		}
 	});
 	it("can burn unsold", async function () {
 		const Melodity = await ethers.getContractFactory("Melodity");

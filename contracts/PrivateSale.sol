@@ -108,7 +108,7 @@ contract PrivateSale is Ownable {
                     // check if referral is valid, if it is not break the loop and return the default value
                     if (
                         _now >= referralCodes[i].startingTime &&
-                        _now <= referralCodes[i].startingTime
+                        _now <= referralCodes[i].endingTime
                     ) {
                         return (
                             referralCodes[i].percentage,
@@ -168,7 +168,7 @@ contract PrivateSale is Ownable {
         uint256 meldToBuy = (bnb * bnbValue * rate) / 10**18;
 
 		if(refPercentage > 0) {
-			meldToBuy *= refPercentage / 10 ** refDecimals;
+			meldToBuy = meldToBuy + meldToBuy * refPercentage / 10 ** refDecimals;
 		}
 
         uint256 bnbDifference;

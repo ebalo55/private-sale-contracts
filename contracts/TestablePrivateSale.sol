@@ -91,12 +91,15 @@ contract TestablePrivateSale is Ownable {
         view
         returns (uint256, uint256)
     {
+		if(log) {
+			console.log("referralCodes.length:", referralCodes.length);
+		}
         // check that referral is not empty
         if (referralCodes.length > 0) {
             // loop through referrals
             for (uint256 i; i < referralCodes.length; i++) {
                 // hash the referral code to securely check it
-                bytes32 h = keccak256(abi.encode(ref));
+                bytes32 h = keccak256(abi.encodePacked(ref));
 
                 if (referralCodes[i].code == h) {
                     // cache the current timestamp
@@ -105,7 +108,7 @@ contract TestablePrivateSale is Ownable {
                     // check if referral is valid, if it is not break the loop and return the default value
                     if (
                         _now >= referralCodes[i].startingTime &&
-                        _now <= referralCodes[i].startingTime
+                        _now <= referralCodes[i].endingTime
                     ) {
                         return (
                             referralCodes[i].percentage,
@@ -130,9 +133,10 @@ contract TestablePrivateSale is Ownable {
         uint256 startingTime,
         uint256 endingTime
     ) public onlyOwner {
+		if(log) { console.log("code:", code); }
         referralCodes.push(
             referral({
-                code: keccak256(abi.encode(code)),
+                code: keccak256(abi.encodePacked(code)),
                 percentage: percentage,
                 decimals: decimals,
                 startingTime: startingTime,
@@ -153,6 +157,12 @@ contract TestablePrivateSale is Ownable {
 
         (uint256 bnbValue, ) = getLatestPrice();
         (uint256 refPercentage, uint256 refDecimals) = getReferral(ref);
+		if (log) {
+			console.log("ref:", ref);
+            console.log("refPercentage:", refPercentage);
+            console.log("refDecimals:", refDecimals);
+        }
+
 		uint256 bnb = msg.value;
 		address account = msg.sender;
 
@@ -171,7 +181,9 @@ contract TestablePrivateSale is Ownable {
         uint256 meldToBuy = (bnb * bnbValue * rate) / 10**18;
 
 		if(refPercentage > 0) {
-			meldToBuy *= refPercentage / 10 ** refDecimals;
+			if(log) { console.log("meldToBuy (refPercentage > 0) [before computation]:", meldToBuy); }
+			meldToBuy = meldToBuy + meldToBuy * refPercentage / 10 ** refDecimals;
+			if(log) { console.log("meldToBuy (refPercentage > 0) [after computation]:", meldToBuy); }
 		}
 
         uint256 bnbDifference;
