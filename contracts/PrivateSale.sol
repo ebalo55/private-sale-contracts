@@ -18,11 +18,11 @@ interface IMelodity {
 
     function decimals() external returns (uint8);
 
-	function release(uint256 lock_id) external;
+    function release(uint256 lock_id) external;
 
-	function burn(uint256 amount) external;
+    function burn(uint256 amount) external;
 
-	function balanceOf(address account) external returns(uint256);
+    function balanceOf(address account) external returns (uint256);
 }
 
 contract PrivateSale is Ownable {
@@ -35,9 +35,19 @@ contract PrivateSale is Ownable {
     event Released(uint256 amount);
     event Bought(address account, uint256 amount);
 
-	uint256 public alive_until = 1642118399;
+    uint256 public alive_until = 1642118399;
     uint256 public ICO_END = 1648771199;
     uint256 month = 2592000; // 60 * 60 * 24 * 30
+
+    struct referral {
+        bytes32 code;
+        uint256 percentage;
+        uint8 decimals;
+        uint256 startingTime;
+        uint256 endingTime;
+    }
+
+    referral[] private referralCodes;
 
     /**
      * Network: Binance Smart Chain (BSC)
@@ -52,7 +62,7 @@ contract PrivateSale is Ownable {
         );
         melodity = IMelodity(0x13E971De9181eeF7A4aEAEAA67552A6a4cc54f43);
 
-        maxRelease = 1 * 10**melodity.decimals();
+        maxRelease = 150_000_000 * 10**melodity.decimals();
         released = 1 * 10**(melodity.decimals() - 1); // 1 decimal position
     }
 
@@ -64,18 +74,90 @@ contract PrivateSale is Ownable {
         return (uint256(price), timestamp);
     }
 
+    /**
+     * Handle direct transaction receival, no referral is sent using this method
+     */
     receive() external payable {
+        buy("");
+    }
+
+    /**
+     * Check a referral code using its raw string representation.
+     * This method returns a tuple as follow:
+     * (
+     *		bonus_percentage,
+     *		decimal_positions
+     * )
+     */
+    function getReferral(string memory ref)
+        private
+        view
+        returns (uint256, uint256)
+    {
+        // check that referral is not empty
+        if (referralCodes.length > 0) {
+            // loop through referrals
+            for (uint256 i; i < referralCodes.length; i++) {
+                // hash the referral code to securely check it
+                bytes32 h = keccak256(abi.encode(ref));
+
+                if (referralCodes[i].code == h) {
+                    // cache the current timestamp
+                    uint256 _now = block.timestamp;
+
+                    // check if referral is valid, if it is not break the loop and return the default value
+                    if (
+                        _now >= referralCodes[i].startingTime &&
+                        _now <= referralCodes[i].startingTime
+                    ) {
+                        return (
+                            referralCodes[i].percentage,
+                            referralCodes[i].decimals
+                        );
+                    }
+                    break;
+                }
+            }
+        }
+        // no referral found, bonus is 0
+        return (0, 0);
+    }
+
+    /**
+     * Add a new referral to the list of available ones
+     */
+    function addReferral(
+        string memory code,
+        uint256 percentage,
+        uint8 decimals,
+        uint256 startingTime,
+        uint256 endingTime
+    ) public onlyOwner {
+        referralCodes.push(
+            referral ({
+                code: keccak256(abi.encode(code)),
+                percentage: percentage,
+                decimals: decimals,
+                startingTime: startingTime,
+                endingTime: endingTime
+            })
+        );
+    }
+
+    function buy(
+        string memory ref
+    ) public payable {
         require(
             msg.value >= 1 ether,
             "Private sale requires a minimum investment of 1 BNB"
         );
         require(released < maxRelease, "Private sale exhausted");
-		require(block.timestamp < alive_until, "Private sale elapsed");
-        buy(msg.sender, msg.value);
-    }
+        require(block.timestamp < alive_until, "Private sale elapsed");
 
-    function buy(address account, uint256 bnb) private {
         (uint256 bnbValue, ) = getLatestPrice();
+		(uint256 refPercentage, uint256 refDecimals) = getReferral(ref);
+		uint256 bnb = msg.value;
+		address account = msg.sender;
 
         // BNB has 18 decimals
         // realign the decimals of bnb and its price in USD
@@ -84,6 +166,11 @@ contract PrivateSale is Ownable {
         // 0.025 $ per MELD => 1 $ = 1000 / 25 = 40 MELD
         uint256 rate = 40;
         uint256 meldToBuy = (bnb * bnbValue * rate) / 10**18;
+
+		if(refPercentage > 0) {
+			meldToBuy *= refPercentage / 10 ** refDecimals;
+		}
+
         uint256 bnbDifference;
 
         if (meldToBuy + released > maxRelease) {
@@ -151,14 +238,14 @@ contract PrivateSale is Ownable {
         emit Released(balance);
     }
 
-	/**
-     * Set a new max release amount, 18 decimals	
-	 */
+    /**
+     * Set a new max release amount, 18 decimals
+     */
     function updateMaxRelease(uint256 _newMaxRelease) public onlyOwner {
         maxRelease = _newMaxRelease;
     }
 
-	/**
+    /**
      * Interact with the melodity token to redeem the self lock
      * and completely burn immediately.
      * All this is done in the same transaction.
@@ -168,12 +255,12 @@ contract PrivateSale is Ownable {
             block.timestamp >= alive_until,
             "Private sale is still live, cannot burn unsold"
         );
-		
+
         melodity.release(0);
         melodity.burn(melodity.balanceOf(address(this)));
     }
 
-	/**
+    /**
      * Interact with the melodity token to create a self lock.
      */
     function createSelfLock() public onlyOwner {
