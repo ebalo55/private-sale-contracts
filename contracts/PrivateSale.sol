@@ -48,6 +48,7 @@ contract PrivateSale is Ownable {
     }
 
     referral[] private referralCodes;
+	bytes32 private emptyRef = keccak256(abi.encode(""));
 
     /**
      * Network: Binance Smart Chain (BSC)
@@ -94,13 +95,13 @@ contract PrivateSale is Ownable {
         view
         returns (uint256, uint256)
     {
+		// hash the referral code to securely check it
+        bytes32 h = keccak256(abi.encode(ref));
+
         // check that referral is not empty
-        if (referralCodes.length > 0) {
+        if (h != emptyRef && referralCodes.length > 0) {
             // loop through referrals
             for (uint256 i; i < referralCodes.length; i++) {
-                // hash the referral code to securely check it
-                bytes32 h = keccak256(abi.encode(ref));
-
                 if (referralCodes[i].code == h) {
                     // cache the current timestamp
                     uint256 _now = block.timestamp;
