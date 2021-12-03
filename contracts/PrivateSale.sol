@@ -56,6 +56,12 @@ contract PrivateSale is Ownable {
      * Address: 0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE
      *
      * Melodity Bep20: 0x13E971De9181eeF7A4aEAEAA67552A6a4cc54f43
+
+	 * Network: Binance Smart Chain TESTNET (BSC)
+     * Aggregator: BNB/USD
+     * Address: 0x2514895c72f50D8bd4B4F9b1110F0D6bD2c97526
+     *
+     * Melodity Bep20: 0x5EaA8Be0ebe73C0B6AdA8946f136B86b92128c55
      */
     constructor() {
         priceFeed = AggregatorV3Interface(
