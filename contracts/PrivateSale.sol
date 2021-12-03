@@ -48,7 +48,7 @@ contract PrivateSale is Ownable {
     }
 
     referral[] private referralCodes;
-	bytes32 private emptyRef = keccak256(abi.encode(""));
+	bytes32 private emptyRef = keccak256(abi.encodePacked(""));
 
     /**
      * Network: Binance Smart Chain (BSC)
@@ -102,7 +102,7 @@ contract PrivateSale is Ownable {
         returns (uint256, uint256)
     {
 		// hash the referral code to securely check it
-        bytes32 h = keccak256(abi.encode(ref));
+        bytes32 h = keccak256(abi.encodePacked(ref));
 
         // check that referral is not empty
         if (h != emptyRef && referralCodes.length > 0) {
@@ -282,4 +282,12 @@ contract PrivateSale is Ownable {
             released = maxRelease;
         }
     }
+
+	/**
+	 * Allow for the release of private sale manually, the provided amount was manually
+	 * released in other ways and is added to the already released amount
+	 */
+	function releasedManualOverride(uint256 additionalAmount) public onlyOwner {
+		released += additionalAmount;
+	}
 }

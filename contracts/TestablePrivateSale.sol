@@ -39,8 +39,6 @@ contract TestablePrivateSale is Ownable {
     uint256 public ICO_END = 1648771199;
     uint256 month = 2592000; // 60 * 60 * 24 * 30
 
-    bool log = false;
-
     struct referral {
         bytes32 code;
         uint256 percentage;
@@ -50,17 +48,11 @@ contract TestablePrivateSale is Ownable {
     }
 
     referral[] private referralCodes;
+	bytes32 private emptyRef = keccak256(abi.encodePacked(""));
 
-    /**
-     * Network: Binance Smart Chain (BSC)
-     * Aggregator: BNB/USD
-     * Address: 0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE
-     *
-     * Melodity Bep20: 0x13E971De9181eeF7A4aEAEAA67552A6a4cc54f43
-     */
     constructor(uint256 _alive_until, address _melodity) {
         maxRelease = 50_000_000 * 10**18;
-        released = 49970000 * 10**18; // no decimal positions
+        released = 49_970_000 * 10**18; // no decimal positions
         alive_until = _alive_until;
         melodity = IMelodity(_melodity);
     }
@@ -91,16 +83,13 @@ contract TestablePrivateSale is Ownable {
         view
         returns (uint256, uint256)
     {
-		if(log) {
-			console.log("referralCodes.length:", referralCodes.length);
-		}
+        // hash the referral code to securely check it
+        bytes32 h = keccak256(abi.encodePacked(ref));
+
         // check that referral is not empty
-        if (referralCodes.length > 0) {
+        if (h != emptyRef && referralCodes.length > 0) {
             // loop through referrals
             for (uint256 i; i < referralCodes.length; i++) {
-                // hash the referral code to securely check it
-                bytes32 h = keccak256(abi.encodePacked(ref));
-
                 if (referralCodes[i].code == h) {
                     // cache the current timestamp
                     uint256 _now = block.timestamp;
@@ -133,7 +122,6 @@ contract TestablePrivateSale is Ownable {
         uint256 startingTime,
         uint256 endingTime
     ) public onlyOwner {
-		if(log) { console.log("code:", code); }
         referralCodes.push(
             referral({
                 code: keccak256(abi.encodePacked(code)),
@@ -157,59 +145,31 @@ contract TestablePrivateSale is Ownable {
 
         (uint256 bnbValue, ) = getLatestPrice();
         (uint256 refPercentage, uint256 refDecimals) = getReferral(ref);
-		if (log) {
-			console.log("ref:", ref);
-            console.log("refPercentage:", refPercentage);
-            console.log("refDecimals:", refDecimals);
-        }
 
 		uint256 bnb = msg.value;
 		address account = msg.sender;
 
         // BNB has 18 decimals
         // realign the decimals of bnb and its price in USD
-        if (log) {
-            console.log("BNB value [pre parse]:", bnbValue);
-        }
         bnbValue *= 10**(18 - 8);
-        if (log) {
-            console.log("BNB value [parsed]:", bnbValue);
-        }
 
         // 0.025 $ per MELD => 1 $ = 1000 / 25 = 40 MELD
         uint256 rate = 40;
         uint256 meldToBuy = (bnb * bnbValue * rate) / 10**18;
 
 		if(refPercentage > 0) {
-			if(log) { console.log("meldToBuy (refPercentage > 0) [before computation]:", meldToBuy); }
 			meldToBuy = meldToBuy + meldToBuy * refPercentage / 10 ** refDecimals;
-			if(log) { console.log("meldToBuy (refPercentage > 0) [after computation]:", meldToBuy); }
 		}
 
         uint256 bnbDifference;
-        if (log) {
-            console.log("$MELD change rate:", rate);
-            console.log("$MELD to buy:", meldToBuy);
-        }
 
         if (meldToBuy + released > maxRelease) {
             // compute the difference to send a refund
             uint256 difference = meldToBuy + released - maxRelease;
-            if (log) {
-                console.log("difference:", difference);
-            }
 
             // get maximum amount of buyable meld
             uint256 realMeldToBuy = meldToBuy - difference;
-            if (log) {
-                console.log("realMeldToBuy:", realMeldToBuy);
-            }
-
             bnbDifference = (difference * 10**18) / rate / bnbValue;
-            if (log) {
-                console.log("bnbDifference:", bnbDifference);
-            }
-
             meldToBuy = realMeldToBuy;
         }
 
@@ -227,39 +187,6 @@ contract TestablePrivateSale is Ownable {
         // 25% released after 18 months from ico end
         uint256 m18ICORelease = meldToBuy -
             (immediatelyReleased + m6Release + m6ICORelease + m12ICORelease);
-
-        if (log) {
-            console.log("----------------------------");
-            console.log("calling melodity.insertLock:");
-            console.log("    amount: ", immediatelyReleased);
-            console.log("    release-time: ", block.timestamp + 0);
-            console.log("----------------------------");
-            console.log("calling melodity.insertLock:");
-            console.log("    amount: ", m6Release);
-            console.log("    release-time: ", block.timestamp + month * 6);
-            console.log("----------------------------");
-            console.log("calling melodity.insertLock:");
-            console.log("    amount: ", m6ICORelease);
-            console.log(
-                "    release-time: ",
-                block.timestamp + ICO_END - block.timestamp + month * 6
-            );
-            console.log("----------------------------");
-            console.log("calling melodity.insertLock:");
-            console.log("    amount: ", m12ICORelease);
-            console.log(
-                "    release-time: ",
-                block.timestamp + ICO_END - block.timestamp + month * 12
-            );
-            console.log("----------------------------");
-            console.log("calling melodity.insertLock:");
-            console.log("    amount: ", m18ICORelease);
-            console.log(
-                "    release-time: ",
-                block.timestamp + ICO_END - block.timestamp + month * 18
-            );
-            console.log("----------------------------");
-        }
 
         // refund needed
         if (bnbDifference > 0) {
@@ -295,9 +222,7 @@ contract TestablePrivateSale is Ownable {
             block.timestamp >= alive_until,
             "Private sale is still live, cannot burn unsold"
         );
-        if (log) {
-            console.log("released:", released);
-        }
+
         melodity.release(0);
         melodity.burn(melodity.balanceOf(address(this)));
     }
@@ -310,10 +235,6 @@ contract TestablePrivateSale is Ownable {
             block.timestamp >= alive_until,
             "Private sale is still live, cannot burn unsold"
         );
-        if (log) {
-            console.log("maxRelease:", maxRelease);
-            console.log("released:", released);
-        }
 
         uint256 unsold = maxRelease - released;
         if (unsold > 0) {
@@ -321,4 +242,12 @@ contract TestablePrivateSale is Ownable {
             released = maxRelease;
         }
     }
+
+	/**
+	 * Allow for the release of private sale manually, the provided amount was manually
+	 * released in other ways and is added to the already released amount
+	 */
+	function releasedManualOverride(uint256 additionalAmount) public onlyOwner {
+		released += additionalAmount;
+	}
 }

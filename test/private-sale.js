@@ -317,6 +317,26 @@ describe("Private sale", function () {
 			);
 		}
 	});
+	it("can manually release funds", async function () {
+		const PrivateSale = await ethers.getContractFactory(
+			"TestablePrivateSale"
+		);
+		const private_sale = await PrivateSale.deploy(
+			1642118399,
+			"0x0000000000000000000000000000000000000000"
+		);
+		await private_sale.deployed();
+
+		let already_released = await ethers.utils.formatEther(await private_sale.released());
+
+		await private_sale.releasedManualOverride(
+			ethers.utils.parseEther("123456.0")
+		)
+		
+		expect(
+			await ethers.utils.formatEther(await private_sale.released())
+		).to.equals((+already_released + 123456).toString() + ".0");
+	});
 	it("can burn unsold", async function () {
 		const Melodity = await ethers.getContractFactory("Melodity");
 		const melodity = await Melodity.deploy();
