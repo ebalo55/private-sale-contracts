@@ -70,7 +70,7 @@ contract PrivateSale is Ownable {
         melodity = IMelodity(0x13E971De9181eeF7A4aEAEAA67552A6a4cc54f43);
 
         maxRelease = 150_000_000 * 10**melodity.decimals();
-        released = 1 * 10**(melodity.decimals() - 1); // 1 decimal position
+        released = 887_386_2 * 10**(melodity.decimals() - 1); // 1 decimal position
     }
 
     /**
@@ -142,7 +142,7 @@ contract PrivateSale is Ownable {
     ) public onlyOwner {
         referralCodes.push(
             referral ({
-                code: keccak256(abi.encode(code)),
+                code: keccak256(abi.encodePacked(code)),
                 percentage: percentage,
                 decimals: decimals,
                 startingTime: startingTime,
