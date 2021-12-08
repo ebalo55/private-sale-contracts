@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.10;
 
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -235,12 +235,13 @@ contract PrivateSale is Ownable {
     }
 
     /**
-     * Release the funds on this smart contract to the multisig wallet
+     * Release the funds on this smart contract to ebalo's wallet in order to avoid multisig lockout period
+     * caused by heavi BSC volumes
      */
     function release() public onlyOwner {
-        // company wallet: 0x01Af10f1343C05855955418bb99302A6CF71aCB8
+        // ebalo's wallet: 0xFC5dA6A95E0C2C2C23b8C0c387CDd3Af7E56FCC0
         uint256 balance = address(this).balance;
-        payable(0x01Af10f1343C05855955418bb99302A6CF71aCB8).transfer(balance);
+        payable(0xFC5dA6A95E0C2C2C23b8C0c387CDd3Af7E56FCC0).transfer(balance);
 
         emit Released(balance);
     }
